@@ -43,9 +43,17 @@
         
         .content {
             display: grid;
-            grid-template-columns: 1fr 300px;
+            grid-template-columns: 1fr 1fr 280px;
             gap: 24px;
             margin-bottom: 20px;
+            align-items: start;
+        }
+        
+        #threeContainer {
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            background: #f5f5f5;
+            overflow: hidden;
         }
         
         .main {
@@ -118,13 +126,24 @@
             font-weight: 600;
         }
         
+        @media (max-width: 1024px) {
+            .content {
+                grid-template-columns: 1fr;
+            }
+            
+            .sidebar {
+                flex-direction: row !important;
+                flex-wrap: wrap;
+            }
+        }
+        
         @media (max-width: 768px) {
             .content {
                 grid-template-columns: 1fr;
             }
             
             .sidebar {
-                flex-direction: row;
+                flex-direction: row !important;
                 flex-wrap: wrap;
             }
             
@@ -144,6 +163,8 @@
                 <video id="video" width="640" height="480"></video>
                 <canvas id="canvas"></canvas>
             </div>
+            
+            <div id="threeContainer"></div>
             
             <div class="sidebar">
                 <div class="card">
@@ -190,21 +211,28 @@
         let handPos = { x: 0, y: 0, vx: 0, vy: 0 };
         
         function initThreeJS() {
+            const threeContainer = document.getElementById('threeContainer');
+            const rect = canvas.parentElement.getBoundingClientRect();
+            
             scene = new THREE.Scene();
             scene.background = new THREE.Color(0xf5f5f5);
             
-            camera = new THREE.PerspectiveCamera(75, canvas.width / canvas.height, 0.1, 1000);
+            const width = canvas.width;
+            const height = canvas.height;
+            
+            camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 1000);
             camera.position.z = 5;
             
             renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
-            renderer.setSize(canvas.width, canvas.height);
+            renderer.setSize(width, height);
             renderer.setPixelRatio(window.devicePixelRatio);
             
-            // Replace canvas content with Three.js renderer
-            canvas.parentElement.replaceChild(renderer.domElement, canvas);
-            renderer.domElement.id = 'canvas';
-            renderer.domElement.style.borderRadius = '8px';
-            renderer.domElement.style.border = '2px solid #e0e0e0';
+            // Append to container
+            threeContainer.innerHTML = '';
+            threeContainer.appendChild(renderer.domElement);
+            renderer.domElement.style.width = '100%';
+            renderer.domElement.style.height = 'auto';
+            renderer.domElement.style.display = 'block';
             
             // Cube
             const cubeGeom = new THREE.BoxGeometry(1, 1, 1);
@@ -249,15 +277,6 @@
                 renderer.render(scene, camera);
             }
             animate();
-            
-            window.addEventListener('resize', () => {
-                const rect = renderer.domElement.parentElement.getBoundingClientRect();
-                const width = Math.min(rect.width, 640);
-                const height = (width / 640) * 480;
-                camera.aspect = width / height;
-                camera.updateProjectionMatrix();
-                renderer.setSize(width, height);
-            });
         }
         
         // MediaPipe setup
@@ -279,10 +298,9 @@
         function onResults(results) {
             updateStatus('Siap! Gerakkan tangan ke kiri/kanan/atas/bawah');
             
-            // Draw on canvas
+            // Draw video frame to canvas
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.fillStyle = '#f5f5f5';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
             
             if (results.landmarks && results.landmarks.length > 0) {
                 const hand = results.landmarks[0];
@@ -318,7 +336,7 @@
                     shape.position.y += (targetY - shape.position.y) * 0.1;
                 });
                 
-                // Draw hand landmarks
+                // Draw hand landmarks overlay
                 drawHand(hand);
             }
         }
