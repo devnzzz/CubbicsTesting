@@ -29,33 +29,87 @@
             position: absolute;
             bottom: 20px;
             left: 20px;
-            background: rgba(0,0,0,0.6);
-            color: #0f0;
-            padding: 8px 15px;
-            border-radius: 20px;
+            background: rgba(0,0,0,0.7);
+            color: #ffaa44;
+            padding: 10px 18px;
+            border-radius: 25px;
             font-family: monospace;
             font-size: 14px;
             pointer-events: none;
             z-index: 10;
             font-weight: bold;
+            backdrop-filter: blur(4px);
+            transition: all 0.3s;
         }
         .instruction {
             position: absolute;
             bottom: 20px;
             right: 20px;
-            background: rgba(0,0,0,0.6);
+            background: rgba(0,0,0,0.7);
             color: white;
-            padding: 10px 15px;
+            padding: 12px 18px;
             border-radius: 8px;
-            font-size: 12px;
+            font-size: 13px;
             text-align: right;
             pointer-events: none;
             z-index: 10;
             font-family: monospace;
+            backdrop-filter: blur(4px);
+            border-right: 3px solid #ffaa44;
+        }
+        #permission-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.9);
+            z-index: 100;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-family: Arial, sans-serif;
+            backdrop-filter: blur(8px);
+        }
+        .permission-box {
+            background: linear-gradient(135deg, #1e1e2f, #2a2a3e);
+            padding: 40px;
+            border-radius: 24px;
+            text-align: center;
+            color: white;
+            max-width: 400px;
+            border: 1px solid #ffaa44;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+        }
+        .permission-box h2 {
+            margin-top: 0;
+            color: #ffaa44;
+        }
+        .permission-box button {
+            background: #ffaa44;
+            color: #1e1e2f;
+            border: none;
+            padding: 12px 30px;
+            font-size: 18px;
+            font-weight: bold;
+            border-radius: 40px;
+            cursor: pointer;
+            margin-top: 20px;
+            transition: transform 0.2s;
+        }
+        .permission-box button:hover {
+            transform: scale(1.05);
+            background: #ffcc66;
+        }
+        .error-message {
+            color: #ff8888;
+            font-size: 14px;
+            margin-top: 15px;
         }
         @media (max-width: 600px) {
-            .instruction { font-size: 10px; bottom: 10px; right: 10px; }
-            #info { font-size: 10px; top: 10px; left: 10px; }
+            .instruction { font-size: 10px; bottom: 10px; right: 10px; padding: 8px 12px; }
+            #info { font-size: 10px; top: 10px; left: 10px; padding: 8px 12px; }
+            #status { font-size: 11px; bottom: 10px; left: 10px; padding: 6px 12px; }
         }
     </style>
 </head>
@@ -65,16 +119,26 @@
         🟦 Kubus (merah) | 🔺 Segitiga (hijau) | 🧱 Persegi Panjang (biru)
     </div>
     <div id="status">
-        🔍 Mendeteksi tangan...
+        ⏳ Menunggu izin kamera...
     </div>
     <div class="instruction">
-        📌 Petunjuk:<br>
+        📌 CARA MAIN:<br>
         👆 Jari telunjuk = kursor<br>
-        🤏 Jepit (telunjuk + jempol) = ambil / klik<br>
-        ✨ Gerakkan tangan untuk memainkan objek
+        🤏 Jepit (telunjuk + jempol) = ambil objek<br>
+        ⬆️⬇️ Gerakkan tangan naik/turun = efek spesial!
     </div>
 
-    <!-- Library yang diperlukan -->
+    <!-- Overlay izin kamera -->
+    <div id="permission-overlay">
+        <div class="permission-box">
+            <h2>📷 IZINKAN KAMERA</h2>
+            <p>Website ini butuh akses kamera untuk mendeteksi gerakan tanganmu.</p>
+            <p style="font-size: 14px; opacity: 0.8;">Kamu bisa mainkan kubus, segitiga, dan persegi panjang dengan jari!</p>
+            <button id="request-camera-btn">🎥 Izinkan Kamera</button>
+            <div id="camera-error-msg" class="error-message"></div>
+        </div>
+    </div>
+
     <script type="importmap">
         {
             "imports": {
@@ -90,70 +154,65 @@
         import { Hands } from '@mediapipe/hands';
         import { Camera } from '@mediapipe/camera_utils';
 
-        // --- Setup Three.js ---
+        // --- Elemen DOM ---
+        const permissionOverlay = document.getElementById('permission-overlay');
+        const requestBtn = document.getElementById('request-camera-btn');
+        const errorMsgDiv = document.getElementById('camera-error-msg');
+        const statusDiv = document.getElementById('status');
+        
+        // --- Setup Three.js (tanpa animasi dulu sampai kamera ready) ---
         const scene = new THREE.Scene();
         scene.background = new THREE.Color(0x111122);
         scene.fog = new THREE.FogExp2(0x111122, 0.008);
         
-        // Kamera 3D
         const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
         camera.position.set(0, 0, 5);
         camera.lookAt(0, 0, 0);
         
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.shadowMap.enabled = true; // bayangan biar keren
+        renderer.shadowMap.enabled = true;
         document.body.appendChild(renderer.domElement);
         
         // Pencahayaan
-        // Ambient light
         const ambientLight = new THREE.AmbientLight(0x404060);
         scene.add(ambientLight);
-        // Main directional light
         const dirLight = new THREE.DirectionalLight(0xffffff, 1);
         dirLight.position.set(2, 5, 3);
         dirLight.castShadow = true;
-        dirLight.receiveShadow = true;
         scene.add(dirLight);
-        // Back light
         const backLight = new THREE.PointLight(0x4466cc, 0.5);
         backLight.position.set(-1, 1, -2);
         scene.add(backLight);
-        // Fill light
         const fillLight = new THREE.PointLight(0xffaa66, 0.4);
         fillLight.position.set(1, 1, 2);
         scene.add(fillLight);
         
-        // Grid helper (opsional, biar ada referensi)
         const gridHelper = new THREE.GridHelper(10, 20, 0x88aaff, 0x335588);
         gridHelper.position.y = -1.2;
         scene.add(gridHelper);
         
-        // --- Objek 3D: Kubus, Segitiga (Piramida), Persegi Panjang (Balok) ---
+        // --- Objek 3D ---
         const objects = [];
         
-        // 1. Kubus (Merah)
         const cubeGeo = new THREE.BoxGeometry(0.9, 0.9, 0.9);
-        const cubeMat = new THREE.MeshStandardMaterial({ color: 0xff3366, metalness: 0.3, roughness: 0.4, emissive: 0x331100 });
+        const cubeMat = new THREE.MeshStandardMaterial({ color: 0xff3366, metalness: 0.3, roughness: 0.4 });
         const cube = new THREE.Mesh(cubeGeo, cubeMat);
         cube.position.set(-1.2, -0.2, 0);
         cube.castShadow = true;
-        cube.receiveShadow = true;
-        cube.userData = { name: "kubus", originalColor: 0xff3366, scaleSpeed: 0.02 };
+        cube.userData = { name: "kubus", originalColor: 0xff3366 };
         scene.add(cube);
         objects.push(cube);
         
-        // 2. Segitiga (Piramida) - Hijau
         const pyramidGeo = new THREE.ConeGeometry(0.6, 1.0, 4);
         const pyramidMat = new THREE.MeshStandardMaterial({ color: 0x44ff44, metalness: 0.2, roughness: 0.5 });
         const pyramid = new THREE.Mesh(pyramidGeo, pyramidMat);
         pyramid.position.set(0, -0.1, 0);
         pyramid.castShadow = true;
-        pyramid.userData = { name: "segitiga", originalColor: 0x44ff44, rotationSpeed: 0.02 };
+        pyramid.userData = { name: "segitiga", originalColor: 0x44ff44 };
         scene.add(pyramid);
         objects.push(pyramid);
         
-        // 3. Persegi Panjang (Balok) - Biru
         const plankGeo = new THREE.BoxGeometry(1.2, 0.5, 0.8);
         const plankMat = new THREE.MeshStandardMaterial({ color: 0x3399ff, metalness: 0.5, roughness: 0.3 });
         const plank = new THREE.Mesh(plankGeo, plankMat);
@@ -163,9 +222,9 @@
         scene.add(plank);
         objects.push(plank);
         
-        // Tambahkan efek partikel kecil biar menarik (opsional)
+        // Bintang latar
         const starGeometry = new THREE.BufferGeometry();
-        const starCount = 600;
+        const starCount = 800;
         const starPositions = new Float32Array(starCount * 3);
         for (let i = 0; i < starCount; i++) {
             starPositions[i*3] = (Math.random() - 0.5) * 200;
@@ -173,233 +232,199 @@
             starPositions[i*3+2] = (Math.random() - 0.5) * 80 - 40;
         }
         starGeometry.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
-        const starMaterial = new THREE.PointsMaterial({ color: 0x88aaff, size: 0.1 });
-        const stars = new THREE.Points(starGeometry, starMaterial);
+        const stars = new THREE.Points(starGeometry, new THREE.PointsMaterial({ color: 0x88aaff, size: 0.1 }));
         scene.add(stars);
         
-        // --- Variabel untuk interaksi tangan ---
-        let handLandmarks = null;          // landmark dari mediapipe
-        let isPinching = false;            // status jepit (telunjuk + jempol)
-        let selectedObject = null;         // objek yang sedang dipegang
-        let pinchStartDistance = 0;
+        // --- Variabel interaksi ---
+        let handLandmarks = null;
+        let isPinching = false;
+        let selectedObject = null;
+        let lastHandY = 0;
+        let debugCursor = null;
         
-        // Raycaster untuk seleksi
-        const raycaster = new THREE.Raycaster();
-        const planeForDrag = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0); // bidang Z=0 untuk drag
+        // Buat cursor 3D
+        const cursorGeo = new THREE.SphereGeometry(0.06, 12, 12);
+        const cursorMat = new THREE.MeshStandardMaterial({ color: 0xffaa44, emissive: 0x442200 });
+        debugCursor = new THREE.Mesh(cursorGeo, cursorMat);
+        scene.add(debugCursor);
+        debugCursor.visible = false;
         
-        // Fungsi untuk konversi landmark 2D (x,y screen normalized 0-1) ke posisi 3D di dunia
-        // Kita mapping berdasarkan bidang pada jarak tertentu dari kamera
-        function get3DPositionFromLandmark(xNorm, yNorm, zDepthOffset = 0) {
-            // Normalized device coordinates (-1 to +1)
+        // Helper functions
+        function get3DPositionFromLandmark(xNorm, yNorm) {
             const ndcX = (xNorm * 2) - 1;
             const ndcY = -(yNorm * 2) + 1;
-            // Asumsikan kedalaman rata-rata objek di Z ~ 0-1, kita pakai plane Z = 0
             const vector = new THREE.Vector3(ndcX, ndcY, 0.5);
             vector.unproject(camera);
             const dir = vector.sub(camera.position).normalize();
             const distance = (0 - camera.position.z) / dir.z;
             const pos = camera.position.clone().add(dir.multiplyScalar(distance));
-            // tambah offset Z untuk sedikit fleksibel
-            pos.z += zDepthOffset;
             return pos;
         }
         
-        // Mendeteksi pinch berdasarkan jarak antara ujung jari telunjuk (8) dan jempol (4)
         function detectPinch(landmarks) {
             if (!landmarks || landmarks.length < 9) return false;
             const thumbTip = landmarks[4];
             const indexTip = landmarks[8];
             const distance = Math.hypot(thumbTip.x - indexTip.x, thumbTip.y - indexTip.y);
-            // threshold 0.05 (5% lebar layar) -> sekitar 30-40px di 720p
             return distance < 0.055;
         }
         
-        // Update status UI
-        const statusDiv = document.getElementById('status');
-        
-        // --- Efek interaksi: memainkan objek dengan gesture tambahan ---
-        // Saat memegang objek, gerakan naik/turun bisa mempengaruhi scale / rotasi
-        let lastHandY = 0;
-        let effectAccumulator = 0;
-        
-        function applyFunEffectOnObject(obj, deltaY, isPinchActive) {
+        function applyEffectOnObject(obj, deltaY) {
             if (!obj) return;
-            // Efek berbeda tiap objek
             if (obj.userData.name === "kubus") {
-                // Kubus: berubah ukuran (scale) mengikuti gerakan naik/turun
-                let newScaleX = obj.scale.x + deltaY * 0.5;
-                newScaleX = Math.min(Math.max(newScaleX, 0.6), 1.6);
-                obj.scale.set(newScaleX, newScaleX, newScaleX);
-                // ubah warna sementara
-                const intensity = (newScaleX - 0.6) / 1.0;
-                obj.material.color.setHex(0xff6666);
+                let newScale = obj.scale.x + deltaY * 0.6;
+                newScale = Math.min(Math.max(newScale, 0.5), 1.8);
+                obj.scale.set(newScale, newScale, newScale);
+                obj.material.color.setHex(0xff8888);
                 setTimeout(() => { if(obj.material) obj.material.color.setHex(0xff3366); }, 150);
             } 
             else if (obj.userData.name === "segitiga") {
-                // Segitiga: berputar dengan cepat
-                obj.rotation.y += deltaY * 3;
-                obj.rotation.x += deltaY * 1.5;
-                obj.material.emissiveIntensity = 0.5 + Math.abs(deltaY) * 3;
+                obj.rotation.y += deltaY * 3.5;
+                obj.rotation.x += deltaY * 2;
+                obj.material.emissiveIntensity = 0.6 + Math.abs(deltaY) * 3;
                 setTimeout(() => { if(obj.material) obj.material.emissiveIntensity = 0; }, 200);
             }
             else if (obj.userData.name === "persegi_panjang") {
-                // Persegi panjang: "memanjang" di sumbu X
-                let newLength = obj.scale.x + deltaY * 1.2;
-                newLength = Math.min(Math.max(newLength, 0.7), 1.8);
+                let newLength = obj.scale.x + deltaY * 1.3;
+                newLength = Math.min(Math.max(newLength, 0.6), 2.0);
                 obj.scale.set(newLength, 1, 1);
-                obj.material.metalness = Math.abs(deltaY) * 1.5;
+                obj.material.metalness = Math.abs(deltaY) * 1.2;
                 setTimeout(() => { if(obj.material) obj.material.metalness = 0.5; }, 200);
             }
         }
         
-        // --- MediaPipe Hands Setup ---
-        const videoElement = document.createElement('video');
-        videoElement.style.display = 'none'; // sembunyikan video element, cukup proses aja
-        document.body.appendChild(videoElement);
-        
-        const hands = new Hands({
-            locateFile: (file) => {
-                return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
-            }
-        });
-        
-        hands.setOptions({
-            maxNumHands: 1,
-            modelComplexity: 1,
-            minDetectionConfidence: 0.5,
-            minTrackingConfidence: 0.5
-        });
-        
-        let handTrackingActive = false;
-        
-        hands.onResults((results) => {
-            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-                handTrackingActive = true;
-                const landmarks = results.multiHandLandmarks[0];
-                handLandmarks = landmarks;
-                
-                // Update status
-                statusDiv.innerHTML = "✅ Tangan terdeteksi! 🤏 Jepit untuk mengambil objek";
-                statusDiv.style.color = "#aaffaa";
-                
-                // Dapatkan posisi jari telunjuk (landmark 8)
-                const indexTip = landmarks[8];
-                const indexX = indexTip.x;
-                const indexY = indexTip.y;
-                
-                // Konversi ke posisi 3D
-                const cursorPos3D = get3DPositionFromLandmark(indexX, indexY, 0);
-                
-                // Deteksi pinch
-                const pinchNow = detectPinch(landmarks);
-                
-                // --- Logika seleksi dan drag ---
-                if (pinchNow && !isPinching) {
-                    // Baru mulai pinch -> coba seleksi objek
-                    raycaster.setFromCamera(new THREE.Vector2((indexX * 2) - 1, -(indexY * 2) + 1), camera);
-                    const intersects = raycaster.intersectObjects(objects);
-                    if (intersects.length > 0) {
-                        selectedObject = intersects[0].object;
-                        // Efek visual terpilih
-                        selectedObject.material.emissiveIntensity = 0.6;
-                        selectedObject.material.color.setHex(0xffaa88);
-                        // Simpan posisi awal hand Y untuk efek
-                        lastHandY = cursorPos3D.y;
-                        effectAccumulator = 0;
-                        statusDiv.innerHTML = "🎮 Objek dipegang! Gerakkan tangan naik/turun untuk efek spesial!";
-                    }
-                } 
-                else if (!pinchNow && isPinching && selectedObject) {
-                    // Lepas objek
-                    selectedObject.material.emissiveIntensity = 0;
-                    // Reset warna
-                    if (selectedObject.userData.name === "kubus") selectedObject.material.color.setHex(0xff3366);
-                    if (selectedObject.userData.name === "segitiga") selectedObject.material.color.setHex(0x44ff44);
-                    if (selectedObject.userData.name === "persegi_panjang") selectedObject.material.color.setHex(0x3399ff);
-                    // Reset scale efek kalau perlu (opsional, biarkan)
-                    if (selectedObject.userData.name === "kubus") selectedObject.scale.set(1,1,1);
-                    if (selectedObject.userData.name === "persegi_panjang") selectedObject.scale.set(1,1,1);
-                    selectedObject = null;
+        // --- Inisialisasi MediaPipe setelah izin ---
+        async function startHandTracking() {
+            const videoElement = document.createElement('video');
+            videoElement.style.display = 'none';
+            document.body.appendChild(videoElement);
+            
+            const hands = new Hands({
+                locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+            });
+            
+            hands.setOptions({
+                maxNumHands: 1,
+                modelComplexity: 1,
+                minDetectionConfidence: 0.5,
+                minTrackingConfidence: 0.5
+            });
+            
+            hands.onResults((results) => {
+                if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                    const landmarks = results.multiHandLandmarks[0];
+                    handLandmarks = landmarks;
                     statusDiv.innerHTML = "✅ Tangan terdeteksi! 🤏 Jepit untuk mengambil objek";
-                }
-                
-                // Jika sedang memegang objek dan pinch aktif -> drag objek + efek gerakan
-                if (selectedObject && pinchNow) {
-                    // Gerakkan objek mengikuti posisi telunjuk
-                    selectedObject.position.x = cursorPos3D.x;
-                    selectedObject.position.y = cursorPos3D.y;
-                    // Batasi jangkauan biar ga kelewat batas
-                    selectedObject.position.x = Math.min(Math.max(selectedObject.position.x, -2.5), 2.5);
-                    selectedObject.position.y = Math.min(Math.max(selectedObject.position.y, -1.5), 1.5);
-                    selectedObject.position.z = 0;
+                    statusDiv.style.color = "#aaffaa";
                     
-                    // Efek seru: deteksi perubahan Y tangan untuk memainkan objek lebih lanjut
-                    const deltaYhand = cursorPos3D.y - lastHandY;
-                    if (Math.abs(deltaYhand) > 0.01) {
-                        applyFunEffectOnObject(selectedObject, deltaYhand, true);
+                    const indexTip = landmarks[8];
+                    const cursorPos = get3DPositionFromLandmark(indexTip.x, indexTip.y);
+                    debugCursor.visible = true;
+                    debugCursor.position.copy(cursorPos);
+                    
+                    const pinchNow = detectPinch(landmarks);
+                    
+                    // Seleksi objek
+                    if (pinchNow && !isPinching) {
+                        const ndcX = (indexTip.x * 2) - 1;
+                        const ndcY = -(indexTip.y * 2) + 1;
+                        const raycaster = new THREE.Raycaster();
+                        raycaster.setFromCamera(new THREE.Vector2(ndcX, ndcY), camera);
+                        const intersects = raycaster.intersectObjects(objects);
+                        if (intersects.length > 0) {
+                            selectedObject = intersects[0].object;
+                            selectedObject.material.emissiveIntensity = 0.5;
+                            lastHandY = cursorPos.y;
+                            statusDiv.innerHTML = "🎮 Objek dipegang! Gerakkan naik/turun!";
+                        }
+                    } 
+                    else if (!pinchNow && isPinching && selectedObject) {
+                        selectedObject.material.emissiveIntensity = 0;
+                        selectedObject.material.color.setHex(selectedObject.userData.originalColor);
+                        if (selectedObject.userData.name === "kubus") selectedObject.scale.set(1,1,1);
+                        if (selectedObject.userData.name === "persegi_panjang") selectedObject.scale.set(1,1,1);
+                        selectedObject = null;
+                        statusDiv.innerHTML = "✅ Tangan terdeteksi! 🤏 Jepit untuk mengambil objek";
                     }
-                    lastHandY = cursorPos3D.y;
-                }
-                
-                isPinching = pinchNow;
-                
-                // Tampilkan visual kursor 3D sementara? Tambahkan sphere kecil di posisi jari (opsional, tapi biar lebih asyik)
-                // Kita buat cursor virtual (hanya visual, non-interaktif)
-                if (!window.debugCursor) {
-                    const cursorGeo = new THREE.SphereGeometry(0.05, 8, 8);
-                    const cursorMat = new THREE.MeshStandardMaterial({ color: 0xffaa44, emissive: 0x442200 });
-                    window.debugCursor = new THREE.Mesh(cursorGeo, cursorMat);
-                    scene.add(window.debugCursor);
-                }
-                if (window.debugCursor) {
-                    window.debugCursor.position.copy(cursorPos3D);
-                    if (isPinching) {
-                        window.debugCursor.scale.set(1.5, 1.5, 1.5);
-                        window.debugCursor.material.color.setHex(0xff6666);
-                    } else {
-                        window.debugCursor.scale.set(1, 1, 1);
-                        window.debugCursor.material.color.setHex(0xffaa44);
+                    
+                    if (selectedObject && pinchNow) {
+                        selectedObject.position.x = cursorPos.x;
+                        selectedObject.position.y = cursorPos.y;
+                        selectedObject.position.x = Math.min(Math.max(selectedObject.position.x, -2.2), 2.2);
+                        selectedObject.position.y = Math.min(Math.max(selectedObject.position.y, -1.3), 1.3);
+                        selectedObject.position.z = 0;
+                        
+                        const deltaY = cursorPos.y - lastHandY;
+                        if (Math.abs(deltaY) > 0.008) {
+                            applyEffectOnObject(selectedObject, deltaY);
+                        }
+                        lastHandY = cursorPos.y;
                     }
+                    
+                    isPinching = pinchNow;
+                    debugCursor.material.color.setHex(isPinching ? 0xff6666 : 0xffaa44);
+                    debugCursor.scale.setScalar(isPinching ? 1.4 : 1);
+                    
+                } else {
+                    statusDiv.innerHTML = "⚠️ Tidak ada tangan. Acungkan tangan ke kamera.";
+                    statusDiv.style.color = "#ffaa66";
+                    debugCursor.visible = false;
+                    if (selectedObject) {
+                        selectedObject.material.emissiveIntensity = 0;
+                        selectedObject.material.color.setHex(selectedObject.userData.originalColor);
+                        selectedObject = null;
+                    }
+                    isPinching = false;
                 }
+            });
+            
+            // Mulai kamera dengan izin yang sudah diberikan
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                videoElement.srcObject = stream;
+                await videoElement.play();
                 
-            } else {
-                handTrackingActive = false;
-                statusDiv.innerHTML = "⚠️ Tidak ada tangan terdeteksi. Acungkan tangan ke kamera.";
-                statusDiv.style.color = "#ffaa66";
-                if (window.debugCursor) window.debugCursor.visible = false;
-                // Lepas objek jika tiba-tiba tangan hilang
-                if (selectedObject) {
-                    selectedObject.material.emissiveIntensity = 0;
-                    if (selectedObject.userData.name === "kubus") selectedObject.material.color.setHex(0xff3366);
-                    if (selectedObject.userData.name === "segitiga") selectedObject.material.color.setHex(0x44ff44);
-                    if (selectedObject.userData.name === "persegi_panjang") selectedObject.material.color.setHex(0x3399ff);
-                    selectedObject = null;
-                }
-                isPinching = false;
+                const cameraUtils = new Camera(videoElement, {
+                    onFrame: async () => {
+                        await hands.send({ image: videoElement });
+                    },
+                    width: 640,
+                    height: 480
+                });
+                cameraUtils.start();
+                statusDiv.innerHTML = "📷 Kamera aktif. Tunggu deteksi tangan...";
+                statusDiv.style.color = "#ffff88";
+                return true;
+            } catch (err) {
+                console.error("Gagal akses kamera:", err);
+                errorMsgDiv.innerHTML = "Gagal akses kamera: " + (err.message || "Izin ditolak atau kamera tidak tersedia");
+                return false;
             }
-        });
+        }
         
-        // Aktifkan kamera menggunakan CameraUtils
-        const cameraUtils = new Camera(videoElement, {
-            onFrame: async () => {
-                await hands.send({ image: videoElement });
-            },
-            width: 640,
-            height: 480
-        });
-        cameraUtils.start().then(() => {
-            statusDiv.innerHTML = "📷 Kamera aktif. Tunggu deteksi tangan...";
-            statusDiv.style.color = "#ffff88";
-        }).catch(err => {
-            console.error("Gagal akses kamera:", err);
-            statusDiv.innerHTML = "❌ Gagal akses kamera. Pastikan izin diberikan & jalankan via HTTPS/localhost.";
-            statusDiv.style.color = "#ff8888";
-        });
+        // --- Tombol izin kamera ---
+        requestBtn.onclick = async () => {
+            errorMsgDiv.innerHTML = "";
+            requestBtn.disabled = true;
+            requestBtn.textContent = "⏳ Memproses...";
+            
+            const success = await startHandTracking();
+            if (success) {
+                permissionOverlay.style.display = "none";
+                statusDiv.innerHTML = "✅ Kamera siap! Acungkan tangan ke kamera.";
+                statusDiv.style.color = "#aaffaa";
+            } else {
+                requestBtn.disabled = false;
+                requestBtn.textContent = "🎥 Coba Lagi";
+                statusDiv.innerHTML = "❌ Izin kamera gagal. Klik tombol izinkan.";
+                statusDiv.style.color = "#ff8888";
+            }
+        };
         
-        // Animasi rotasi objek saat tidak dipegang biar tetap hidup
-        function animateIdle() {
+        // --- Animasi idle ---
+        function animate() {
+            requestAnimationFrame(animate);
             if (!selectedObject) {
-                // rotasi halus untuk segitiga dan sedikit gerakan untuk lainnya
                 pyramid.rotation.y += 0.008;
                 pyramid.rotation.x += 0.005;
                 cube.rotation.y += 0.005;
@@ -407,37 +432,17 @@
             }
             stars.rotation.y += 0.0005;
             stars.rotation.x += 0.0003;
-        }
-        
-        // Animasi utama
-        function animate() {
-            requestAnimationFrame(animate);
-            animateIdle();
-            
-            // Update posisi kamera little orbit kalau tidak ada interaksi? (opsional, biar tidak)
-            // Biarkan kamera tetap diam agar interaksi konsisten
             renderer.render(scene, camera);
         }
-        
         animate();
         
-        // Handle resize window
-        window.addEventListener('resize', onWindowResize, false);
-        function onWindowResize() {
+        window.addEventListener('resize', () => {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
-        }
+        });
         
-        // Pesan di console
-        console.log("Siap! Gunakan jari telunjuk sebagai kursor, jepit dengan jempol untuk ambil objek, lalu gerakkan naik/turun untuk efek spesial pada masing-masing objek!");
-        
-        // Tambahkan instruksi lebih jelas di console
-        const styleConsole = "color: #00ff99; font-size: 14px;";
-        console.log("%c✨ SELAMAT DATANG ✨", styleConsole);
-        console.log("%cKubus Merah   -> gerakan naik/turun akan mengubah ukuran", "color: #ff8888");
-        console.log("%cSegitiga Hijau -> gerakan naik/turun akan memutar dengan kencang", "color: #88ff88");
-        console.log("%cPersegi Panjang Biru -> gerakan naik/turun akan memanjang memendek", "color: #88aaff");
+        console.log("%c✨ Siap! Klik 'Izinkan Kamera' untuk mulai bermain ✨", "color: #ffaa44; font-size: 14px");
     </script>
 </body>
 </html>
