@@ -2,287 +2,264 @@
 <html lang="id">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hand Detection 3D Shapes</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.4.1646424915/camera_utils.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils@0.4.1646424915/drawing_utils.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/hands.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Mainkan Objek 3D dengan Tangan - Deteksi Jari</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            padding: 20px;
-        }
-        
-        .container {
-            background: white;
-            border-radius: 16px;
-            padding: 24px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-            max-width: 1000px;
-            width: 100%;
-        }
-        
-        h1 {
-            font-size: 28px;
-            margin-bottom: 24px;
-            color: #333;
-            text-align: center;
-        }
-        
-        .content {
-            display: grid;
-            grid-template-columns: 1fr 1fr 280px;
-            gap: 24px;
-            margin-bottom: 20px;
-            align-items: start;
-        }
-        
-        #threeContainer {
-            border: 2px solid #e0e0e0;
-            border-radius: 8px;
-            background: #f5f5f5;
+            margin: 0;
             overflow: hidden;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
-        
-        .main {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-        }
-        
-        #video {
-            display: none;
-        }
-        
-        canvas {
-            border: 2px solid #e0e0e0;
+        #info {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 12px 20px;
             border-radius: 8px;
-            width: 100%;
-            background: #f5f5f5;
+            pointer-events: none;
+            z-index: 10;
+            backdrop-filter: blur(5px);
+            font-size: 14px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+            border-left: 4px solid #ff3366;
         }
-        
-        .sidebar {
-            display: flex;
-            flex-direction: column;
-            gap: 16px;
-        }
-        
-        .card {
-            background: #f9f9f9;
-            border: 1px solid #e0e0e0;
-            border-radius: 8px;
-            padding: 16px;
-        }
-        
-        .card-label {
-            font-size: 12px;
-            color: #666;
-            font-weight: 600;
-            text-transform: uppercase;
-            margin-bottom: 8px;
-        }
-        
-        .card-content {
-            font-size: 16px;
-            color: #333;
-            font-weight: 500;
-        }
-        
-        .direction {
-            font-size: 24px;
-            color: #667eea;
+        #status {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(0,0,0,0.6);
+            color: #0f0;
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-family: monospace;
+            font-size: 14px;
+            pointer-events: none;
+            z-index: 10;
             font-weight: bold;
         }
-        
-        .shapes-info {
-            font-size: 14px;
-            color: #555;
-            line-height: 1.8;
+        .instruction {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(0,0,0,0.6);
+            color: white;
+            padding: 10px 15px;
+            border-radius: 8px;
+            font-size: 12px;
+            text-align: right;
+            pointer-events: none;
+            z-index: 10;
+            font-family: monospace;
         }
-        
-        .shapes-info div {
-            margin: 6px 0;
-        }
-        
-        .status-active {
-            color: #10b981;
-            font-weight: 600;
-        }
-        
-        .status-inactive {
-            color: #ef4444;
-            font-weight: 600;
-        }
-        
-        @media (max-width: 1024px) {
-            .content {
-                grid-template-columns: 1fr;
-            }
-            
-            .sidebar {
-                flex-direction: row !important;
-                flex-wrap: wrap;
-            }
-        }
-        
-        @media (max-width: 768px) {
-            .content {
-                grid-template-columns: 1fr;
-            }
-            
-            .sidebar {
-                flex-direction: row !important;
-                flex-wrap: wrap;
-            }
-            
-            .card {
-                flex: 1;
-                min-width: 150px;
-            }
+        @media (max-width: 600px) {
+            .instruction { font-size: 10px; bottom: 10px; right: 10px; }
+            #info { font-size: 10px; top: 10px; left: 10px; }
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>🎮 Hand Detection 3D Shapes</h1>
-        
-        <div class="content">
-            <div class="main">
-                <video id="video" width="640" height="480"></video>
-                <canvas id="canvas"></canvas>
-            </div>
-            
-            <div id="threeContainer"></div>
-            
-            <div class="sidebar">
-                <div class="card">
-                    <div class="card-label">Status</div>
-                    <div class="card-content">
-                        <span id="status" class="status-inactive">Loading...</span>
-                    </div>
-                </div>
-                
-                <div class="card">
-                    <div class="card-label">Arah Tangan</div>
-                    <div class="card-content direction" id="direction">—</div>
-                </div>
-                
-                <div class="card">
-                    <div class="card-label">Shapes</div>
-                    <div class="shapes-info">
-                        <div>🔴 Kubus Merah</div>
-                        <div>🔵 Piramida Biru</div>
-                        <div>🟢 Kotak Hijau</div>
-                    </div>
-                </div>
-            </div>
-        </div>
+    <div id="info">
+        ✋ MAINAN OBJEK 3D PAKAI TANGAN<br>
+        🟦 Kubus (merah) | 🔺 Segitiga (hijau) | 🧱 Persegi Panjang (biru)
+    </div>
+    <div id="status">
+        🔍 Mendeteksi tangan...
+    </div>
+    <div class="instruction">
+        📌 Petunjuk:<br>
+        👆 Jari telunjuk = kursor<br>
+        🤏 Jepit (telunjuk + jempol) = ambil / klik<br>
+        ✨ Gerakkan tangan untuk memainkan objek
     </div>
 
-    <script>
-        // Canvas setup
-        const canvas = document.getElementById('canvas');
-        const ctx = canvas.getContext('2d');
-        const video = document.getElementById('video');
-        
-        // Set canvas size
-        function resizeCanvas() {
-            const rect = canvas.parentElement.getBoundingClientRect();
-            canvas.width = Math.min(rect.width, 640);
-            canvas.height = (canvas.width / 640) * 480;
-        }
-        resizeCanvas();
-        window.addEventListener('resize', resizeCanvas);
-        
-        // Three.js setup
-        let scene, camera, renderer, shapes = [];
-        let handPos = { x: 0, y: 0, vx: 0, vy: 0 };
-        
-        function initThreeJS() {
-            const threeContainer = document.getElementById('threeContainer');
-            const rect = canvas.parentElement.getBoundingClientRect();
-            
-            scene = new THREE.Scene();
-            scene.background = new THREE.Color(0xf5f5f5);
-            
-            const width = canvas.width;
-            const height = canvas.height;
-            
-            camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 1000);
-            camera.position.z = 5;
-            
-            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
-            renderer.setSize(width, height);
-            renderer.setPixelRatio(window.devicePixelRatio);
-            
-            // Append to container
-            threeContainer.innerHTML = '';
-            threeContainer.appendChild(renderer.domElement);
-            renderer.domElement.style.width = '100%';
-            renderer.domElement.style.height = 'auto';
-            renderer.domElement.style.display = 'block';
-            
-            // Cube
-            const cubeGeom = new THREE.BoxGeometry(1, 1, 1);
-            const cubeMat = new THREE.MeshPhongMaterial({ color: 0xff6b6b });
-            const cube = new THREE.Mesh(cubeGeom, cubeMat);
-            cube.position.x = -2;
-            scene.add(cube);
-            
-            // Pyramid (Tetrahedron)
-            const pyramidGeom = new THREE.TetrahedronGeometry(0.8);
-            const pyramidMat = new THREE.MeshPhongMaterial({ color: 0x4ecdc4 });
-            const pyramid = new THREE.Mesh(pyramidGeom, pyramidMat);
-            pyramid.position.x = 0;
-            scene.add(pyramid);
-            
-            // Box (Rectangle)
-            const boxGeom = new THREE.BoxGeometry(1.5, 0.6, 0.8);
-            const boxMat = new THREE.MeshPhongMaterial({ color: 0x95e1d3 });
-            const box = new THREE.Mesh(boxGeom, boxMat);
-            box.position.x = 2;
-            scene.add(box);
-            
-            shapes = [cube, pyramid, box];
-            
-            // Lighting
-            const light = new THREE.DirectionalLight(0xffffff, 1);
-            light.position.set(5, 5, 5);
-            scene.add(light);
-            
-            const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
-            scene.add(ambientLight);
-            
-            // Animation loop
-            function animate() {
-                requestAnimationFrame(animate);
-                
-                shapes.forEach(shape => {
-                    shape.rotation.x += 0.005;
-                    shape.rotation.y += 0.008;
-                });
-                
-                renderer.render(scene, camera);
+    <!-- Library yang diperlukan -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.128.0/build/three.module.js",
+                "@mediapipe/hands": "https://cdn.skypack.dev/@mediapipe/hands",
+                "@mediapipe/camera_utils": "https://cdn.skypack.dev/@mediapipe/camera_utils"
             }
-            animate();
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { Hands } from '@mediapipe/hands';
+        import { Camera } from '@mediapipe/camera_utils';
+
+        // --- Setup Three.js ---
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x111122);
+        scene.fog = new THREE.FogExp2(0x111122, 0.008);
+        
+        // Kamera 3D
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 0, 5);
+        camera.lookAt(0, 0, 0);
+        
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true; // bayangan biar keren
+        document.body.appendChild(renderer.domElement);
+        
+        // Pencahayaan
+        // Ambient light
+        const ambientLight = new THREE.AmbientLight(0x404060);
+        scene.add(ambientLight);
+        // Main directional light
+        const dirLight = new THREE.DirectionalLight(0xffffff, 1);
+        dirLight.position.set(2, 5, 3);
+        dirLight.castShadow = true;
+        dirLight.receiveShadow = true;
+        scene.add(dirLight);
+        // Back light
+        const backLight = new THREE.PointLight(0x4466cc, 0.5);
+        backLight.position.set(-1, 1, -2);
+        scene.add(backLight);
+        // Fill light
+        const fillLight = new THREE.PointLight(0xffaa66, 0.4);
+        fillLight.position.set(1, 1, 2);
+        scene.add(fillLight);
+        
+        // Grid helper (opsional, biar ada referensi)
+        const gridHelper = new THREE.GridHelper(10, 20, 0x88aaff, 0x335588);
+        gridHelper.position.y = -1.2;
+        scene.add(gridHelper);
+        
+        // --- Objek 3D: Kubus, Segitiga (Piramida), Persegi Panjang (Balok) ---
+        const objects = [];
+        
+        // 1. Kubus (Merah)
+        const cubeGeo = new THREE.BoxGeometry(0.9, 0.9, 0.9);
+        const cubeMat = new THREE.MeshStandardMaterial({ color: 0xff3366, metalness: 0.3, roughness: 0.4, emissive: 0x331100 });
+        const cube = new THREE.Mesh(cubeGeo, cubeMat);
+        cube.position.set(-1.2, -0.2, 0);
+        cube.castShadow = true;
+        cube.receiveShadow = true;
+        cube.userData = { name: "kubus", originalColor: 0xff3366, scaleSpeed: 0.02 };
+        scene.add(cube);
+        objects.push(cube);
+        
+        // 2. Segitiga (Piramida) - Hijau
+        const pyramidGeo = new THREE.ConeGeometry(0.6, 1.0, 4);
+        const pyramidMat = new THREE.MeshStandardMaterial({ color: 0x44ff44, metalness: 0.2, roughness: 0.5 });
+        const pyramid = new THREE.Mesh(pyramidGeo, pyramidMat);
+        pyramid.position.set(0, -0.1, 0);
+        pyramid.castShadow = true;
+        pyramid.userData = { name: "segitiga", originalColor: 0x44ff44, rotationSpeed: 0.02 };
+        scene.add(pyramid);
+        objects.push(pyramid);
+        
+        // 3. Persegi Panjang (Balok) - Biru
+        const plankGeo = new THREE.BoxGeometry(1.2, 0.5, 0.8);
+        const plankMat = new THREE.MeshStandardMaterial({ color: 0x3399ff, metalness: 0.5, roughness: 0.3 });
+        const plank = new THREE.Mesh(plankGeo, plankMat);
+        plank.position.set(1.2, -0.3, 0.2);
+        plank.castShadow = true;
+        plank.userData = { name: "persegi_panjang", originalColor: 0x3399ff };
+        scene.add(plank);
+        objects.push(plank);
+        
+        // Tambahkan efek partikel kecil biar menarik (opsional)
+        const starGeometry = new THREE.BufferGeometry();
+        const starCount = 600;
+        const starPositions = new Float32Array(starCount * 3);
+        for (let i = 0; i < starCount; i++) {
+            starPositions[i*3] = (Math.random() - 0.5) * 200;
+            starPositions[i*3+1] = (Math.random() - 0.5) * 100;
+            starPositions[i*3+2] = (Math.random() - 0.5) * 80 - 40;
+        }
+        starGeometry.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
+        const starMaterial = new THREE.PointsMaterial({ color: 0x88aaff, size: 0.1 });
+        const stars = new THREE.Points(starGeometry, starMaterial);
+        scene.add(stars);
+        
+        // --- Variabel untuk interaksi tangan ---
+        let handLandmarks = null;          // landmark dari mediapipe
+        let isPinching = false;            // status jepit (telunjuk + jempol)
+        let selectedObject = null;         // objek yang sedang dipegang
+        let pinchStartDistance = 0;
+        
+        // Raycaster untuk seleksi
+        const raycaster = new THREE.Raycaster();
+        const planeForDrag = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0); // bidang Z=0 untuk drag
+        
+        // Fungsi untuk konversi landmark 2D (x,y screen normalized 0-1) ke posisi 3D di dunia
+        // Kita mapping berdasarkan bidang pada jarak tertentu dari kamera
+        function get3DPositionFromLandmark(xNorm, yNorm, zDepthOffset = 0) {
+            // Normalized device coordinates (-1 to +1)
+            const ndcX = (xNorm * 2) - 1;
+            const ndcY = -(yNorm * 2) + 1;
+            // Asumsikan kedalaman rata-rata objek di Z ~ 0-1, kita pakai plane Z = 0
+            const vector = new THREE.Vector3(ndcX, ndcY, 0.5);
+            vector.unproject(camera);
+            const dir = vector.sub(camera.position).normalize();
+            const distance = (0 - camera.position.z) / dir.z;
+            const pos = camera.position.clone().add(dir.multiplyScalar(distance));
+            // tambah offset Z untuk sedikit fleksibel
+            pos.z += zDepthOffset;
+            return pos;
         }
         
-        // MediaPipe setup
+        // Mendeteksi pinch berdasarkan jarak antara ujung jari telunjuk (8) dan jempol (4)
+        function detectPinch(landmarks) {
+            if (!landmarks || landmarks.length < 9) return false;
+            const thumbTip = landmarks[4];
+            const indexTip = landmarks[8];
+            const distance = Math.hypot(thumbTip.x - indexTip.x, thumbTip.y - indexTip.y);
+            // threshold 0.05 (5% lebar layar) -> sekitar 30-40px di 720p
+            return distance < 0.055;
+        }
+        
+        // Update status UI
+        const statusDiv = document.getElementById('status');
+        
+        // --- Efek interaksi: memainkan objek dengan gesture tambahan ---
+        // Saat memegang objek, gerakan naik/turun bisa mempengaruhi scale / rotasi
+        let lastHandY = 0;
+        let effectAccumulator = 0;
+        
+        function applyFunEffectOnObject(obj, deltaY, isPinchActive) {
+            if (!obj) return;
+            // Efek berbeda tiap objek
+            if (obj.userData.name === "kubus") {
+                // Kubus: berubah ukuran (scale) mengikuti gerakan naik/turun
+                let newScaleX = obj.scale.x + deltaY * 0.5;
+                newScaleX = Math.min(Math.max(newScaleX, 0.6), 1.6);
+                obj.scale.set(newScaleX, newScaleX, newScaleX);
+                // ubah warna sementara
+                const intensity = (newScaleX - 0.6) / 1.0;
+                obj.material.color.setHex(0xff6666);
+                setTimeout(() => { if(obj.material) obj.material.color.setHex(0xff3366); }, 150);
+            } 
+            else if (obj.userData.name === "segitiga") {
+                // Segitiga: berputar dengan cepat
+                obj.rotation.y += deltaY * 3;
+                obj.rotation.x += deltaY * 1.5;
+                obj.material.emissiveIntensity = 0.5 + Math.abs(deltaY) * 3;
+                setTimeout(() => { if(obj.material) obj.material.emissiveIntensity = 0; }, 200);
+            }
+            else if (obj.userData.name === "persegi_panjang") {
+                // Persegi panjang: "memanjang" di sumbu X
+                let newLength = obj.scale.x + deltaY * 1.2;
+                newLength = Math.min(Math.max(newLength, 0.7), 1.8);
+                obj.scale.set(newLength, 1, 1);
+                obj.material.metalness = Math.abs(deltaY) * 1.5;
+                setTimeout(() => { if(obj.material) obj.material.metalness = 0.5; }, 200);
+            }
+        }
+        
+        // --- MediaPipe Hands Setup ---
+        const videoElement = document.createElement('video');
+        videoElement.style.display = 'none'; // sembunyikan video element, cukup proses aja
+        document.body.appendChild(videoElement);
+        
         const hands = new Hands({
             locateFile: (file) => {
-                return `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/${file}`;
+                return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
             }
         });
         
@@ -293,136 +270,174 @@
             minTrackingConfidence: 0.5
         });
         
-        hands.onResults(onResults);
+        let handTrackingActive = false;
         
-        function onResults(results) {
-            // Draw video frame to canvas
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-            
-            if (results.landmarks && results.landmarks.length > 0) {
-                const hand = results.landmarks[0];
-                const palmX = (hand[9].x - 0.5) * 6;
-                const palmY = (0.5 - hand[9].y) * 6;
+        hands.onResults((results) => {
+            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                handTrackingActive = true;
+                const landmarks = results.multiHandLandmarks[0];
+                handLandmarks = landmarks;
                 
-                // Calculate velocity
-                const oldVx = handPos.vx;
-                const oldVy = handPos.vy;
-                handPos.vx = palmX - handPos.x;
-                handPos.vy = palmY - handPos.y;
-                handPos.x = palmX;
-                handPos.y = palmY;
+                // Update status
+                statusDiv.innerHTML = "✅ Tangan terdeteksi! 🤏 Jepit untuk mengambil objek";
+                statusDiv.style.color = "#aaffaa";
                 
-                // Detect direction
-                const vx = handPos.vx;
-                const vy = handPos.vy;
+                // Dapatkan posisi jari telunjuk (landmark 8)
+                const indexTip = landmarks[8];
+                const indexX = indexTip.x;
+                const indexY = indexTip.y;
                 
-                let directionText = '—';
-                if (Math.abs(vx) > Math.abs(vy)) {
-                    directionText = vx > 0.3 ? '→ Kanan' : vx < -0.3 ? '← Kiri' : '↔ Stabil';
-                } else {
-                    directionText = vy > 0.3 ? '↑ Atas' : vy < -0.3 ? '↓ Bawah' : '⬌ Stabil';
+                // Konversi ke posisi 3D
+                const cursorPos3D = get3DPositionFromLandmark(indexX, indexY, 0);
+                
+                // Deteksi pinch
+                const pinchNow = detectPinch(landmarks);
+                
+                // --- Logika seleksi dan drag ---
+                if (pinchNow && !isPinching) {
+                    // Baru mulai pinch -> coba seleksi objek
+                    raycaster.setFromCamera(new THREE.Vector2((indexX * 2) - 1, -(indexY * 2) + 1), camera);
+                    const intersects = raycaster.intersectObjects(objects);
+                    if (intersects.length > 0) {
+                        selectedObject = intersects[0].object;
+                        // Efek visual terpilih
+                        selectedObject.material.emissiveIntensity = 0.6;
+                        selectedObject.material.color.setHex(0xffaa88);
+                        // Simpan posisi awal hand Y untuk efek
+                        lastHandY = cursorPos3D.y;
+                        effectAccumulator = 0;
+                        statusDiv.innerHTML = "🎮 Objek dipegang! Gerakkan tangan naik/turun untuk efek spesial!";
+                    }
+                } 
+                else if (!pinchNow && isPinching && selectedObject) {
+                    // Lepas objek
+                    selectedObject.material.emissiveIntensity = 0;
+                    // Reset warna
+                    if (selectedObject.userData.name === "kubus") selectedObject.material.color.setHex(0xff3366);
+                    if (selectedObject.userData.name === "segitiga") selectedObject.material.color.setHex(0x44ff44);
+                    if (selectedObject.userData.name === "persegi_panjang") selectedObject.material.color.setHex(0x3399ff);
+                    // Reset scale efek kalau perlu (opsional, biarkan)
+                    if (selectedObject.userData.name === "kubus") selectedObject.scale.set(1,1,1);
+                    if (selectedObject.userData.name === "persegi_panjang") selectedObject.scale.set(1,1,1);
+                    selectedObject = null;
+                    statusDiv.innerHTML = "✅ Tangan terdeteksi! 🤏 Jepit untuk mengambil objek";
                 }
                 
-                document.getElementById('direction').textContent = directionText;
-                
-                // Move shapes
-                shapes.forEach((shape, idx) => {
-                    const targetX = palmX + (idx - 1) * 2;
-                    const targetY = palmY;
-                    shape.position.x += (targetX - shape.position.x) * 0.1;
-                    shape.position.y += (targetY - shape.position.y) * 0.1;
-                });
-                
-                // Draw hand landmarks overlay
-                drawHand(hand);
-            }
-        }
-        
-        function drawHand(landmarks) {
-            // Draw skeleton
-            ctx.strokeStyle = '#667eea';
-            ctx.lineWidth = 2;
-            
-            const connections = [
-                [0, 1], [1, 2], [2, 3], [3, 4],
-                [0, 5], [5, 6], [6, 7], [7, 8],
-                [0, 9], [9, 10], [10, 11], [11, 12],
-                [0, 13], [13, 14], [14, 15], [15, 16],
-                [0, 17], [17, 18], [18, 19], [19, 20],
-                [5, 9], [9, 13], [13, 17], [0, 17]
-            ];
-            
-            connections.forEach(([start, end]) => {
-                const p1 = landmarks[start];
-                const p2 = landmarks[end];
-                ctx.beginPath();
-                ctx.moveTo(p1.x * canvas.width, p1.y * canvas.height);
-                ctx.lineTo(p2.x * canvas.width, p2.y * canvas.height);
-                ctx.stroke();
-            });
-            
-            // Draw landmarks
-            ctx.fillStyle = '#764ba2';
-            landmarks.forEach(point => {
-                ctx.beginPath();
-                ctx.arc(point.x * canvas.width, point.y * canvas.height, 4, 0, 2 * Math.PI);
-                ctx.fill();
-            });
-        }
-        
-        function updateStatus(text) {
-            const statusEl = document.getElementById('status');
-            statusEl.textContent = text;
-            statusEl.className = 'status-active';
-        }
-        
-        function updateStatusError(text) {
-            const statusEl = document.getElementById('status');
-            statusEl.textContent = text;
-            statusEl.className = 'status-inactive';
-        }
-        
-        // Start
-        async function start() {
-            try {
-                updateStatus('📷 Nyalain kamera...');
-                
-                const stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { width: { ideal: 640 }, height: { ideal: 480 } }
-                });
-                
-                video.srcObject = stream;
-                video.onloadedmetadata = () => {
-                    video.play();
-                    updateStatus('🔄 Loading MediaPipe...');
+                // Jika sedang memegang objek dan pinch aktif -> drag objek + efek gerakan
+                if (selectedObject && pinchNow) {
+                    // Gerakkan objek mengikuti posisi telunjuk
+                    selectedObject.position.x = cursorPos3D.x;
+                    selectedObject.position.y = cursorPos3D.y;
+                    // Batasi jangkauan biar ga kelewat batas
+                    selectedObject.position.x = Math.min(Math.max(selectedObject.position.x, -2.5), 2.5);
+                    selectedObject.position.y = Math.min(Math.max(selectedObject.position.y, -1.5), 1.5);
+                    selectedObject.position.z = 0;
                     
-                    // Initialize Three.js
-                    setTimeout(() => {
-                        initThreeJS();
-                    }, 100);
-                    
-                    // Initialize camera with delay
-                    setTimeout(() => {
-                        const camera = new Camera(video, {
-                            onFrame: async () => {
-                                await hands.send({ image: video });
-                            },
-                            width: 640,
-                            height: 480
-                        });
-                        camera.start();
-                        updateStatus('✅ Siap! Gerakkan tangan ke kiri/kanan/atas/bawah');
-                    }, 800);
-                };
-            } catch (err) {
-                updateStatusError('❌ Ijinkan akses kamera!');
-                console.error(err);
+                    // Efek seru: deteksi perubahan Y tangan untuk memainkan objek lebih lanjut
+                    const deltaYhand = cursorPos3D.y - lastHandY;
+                    if (Math.abs(deltaYhand) > 0.01) {
+                        applyFunEffectOnObject(selectedObject, deltaYhand, true);
+                    }
+                    lastHandY = cursorPos3D.y;
+                }
+                
+                isPinching = pinchNow;
+                
+                // Tampilkan visual kursor 3D sementara? Tambahkan sphere kecil di posisi jari (opsional, tapi biar lebih asyik)
+                // Kita buat cursor virtual (hanya visual, non-interaktif)
+                if (!window.debugCursor) {
+                    const cursorGeo = new THREE.SphereGeometry(0.05, 8, 8);
+                    const cursorMat = new THREE.MeshStandardMaterial({ color: 0xffaa44, emissive: 0x442200 });
+                    window.debugCursor = new THREE.Mesh(cursorGeo, cursorMat);
+                    scene.add(window.debugCursor);
+                }
+                if (window.debugCursor) {
+                    window.debugCursor.position.copy(cursorPos3D);
+                    if (isPinching) {
+                        window.debugCursor.scale.set(1.5, 1.5, 1.5);
+                        window.debugCursor.material.color.setHex(0xff6666);
+                    } else {
+                        window.debugCursor.scale.set(1, 1, 1);
+                        window.debugCursor.material.color.setHex(0xffaa44);
+                    }
+                }
+                
+            } else {
+                handTrackingActive = false;
+                statusDiv.innerHTML = "⚠️ Tidak ada tangan terdeteksi. Acungkan tangan ke kamera.";
+                statusDiv.style.color = "#ffaa66";
+                if (window.debugCursor) window.debugCursor.visible = false;
+                // Lepas objek jika tiba-tiba tangan hilang
+                if (selectedObject) {
+                    selectedObject.material.emissiveIntensity = 0;
+                    if (selectedObject.userData.name === "kubus") selectedObject.material.color.setHex(0xff3366);
+                    if (selectedObject.userData.name === "segitiga") selectedObject.material.color.setHex(0x44ff44);
+                    if (selectedObject.userData.name === "persegi_panjang") selectedObject.material.color.setHex(0x3399ff);
+                    selectedObject = null;
+                }
+                isPinching = false;
             }
+        });
+        
+        // Aktifkan kamera menggunakan CameraUtils
+        const cameraUtils = new Camera(videoElement, {
+            onFrame: async () => {
+                await hands.send({ image: videoElement });
+            },
+            width: 640,
+            height: 480
+        });
+        cameraUtils.start().then(() => {
+            statusDiv.innerHTML = "📷 Kamera aktif. Tunggu deteksi tangan...";
+            statusDiv.style.color = "#ffff88";
+        }).catch(err => {
+            console.error("Gagal akses kamera:", err);
+            statusDiv.innerHTML = "❌ Gagal akses kamera. Pastikan izin diberikan & jalankan via HTTPS/localhost.";
+            statusDiv.style.color = "#ff8888";
+        });
+        
+        // Animasi rotasi objek saat tidak dipegang biar tetap hidup
+        function animateIdle() {
+            if (!selectedObject) {
+                // rotasi halus untuk segitiga dan sedikit gerakan untuk lainnya
+                pyramid.rotation.y += 0.008;
+                pyramid.rotation.x += 0.005;
+                cube.rotation.y += 0.005;
+                plank.rotation.z = Math.sin(Date.now() * 0.002) * 0.1;
+            }
+            stars.rotation.y += 0.0005;
+            stars.rotation.x += 0.0003;
         }
         
-        // Start the app
-        start();
+        // Animasi utama
+        function animate() {
+            requestAnimationFrame(animate);
+            animateIdle();
+            
+            // Update posisi kamera little orbit kalau tidak ada interaksi? (opsional, biar tidak)
+            // Biarkan kamera tetap diam agar interaksi konsisten
+            renderer.render(scene, camera);
+        }
+        
+        animate();
+        
+        // Handle resize window
+        window.addEventListener('resize', onWindowResize, false);
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+        
+        // Pesan di console
+        console.log("Siap! Gunakan jari telunjuk sebagai kursor, jepit dengan jempol untuk ambil objek, lalu gerakkan naik/turun untuk efek spesial pada masing-masing objek!");
+        
+        // Tambahkan instruksi lebih jelas di console
+        const styleConsole = "color: #00ff99; font-size: 14px;";
+        console.log("%c✨ SELAMAT DATANG ✨", styleConsole);
+        console.log("%cKubus Merah   -> gerakan naik/turun akan mengubah ukuran", "color: #ff8888");
+        console.log("%cSegitiga Hijau -> gerakan naik/turun akan memutar dengan kencang", "color: #88ff88");
+        console.log("%cPersegi Panjang Biru -> gerakan naik/turun akan memanjang memendek", "color: #88aaff");
     </script>
 </body>
 </html>
