@@ -296,8 +296,6 @@
         hands.onResults(onResults);
         
         function onResults(results) {
-            updateStatus('Siap! Gerakkan tangan ke kiri/kanan/atas/bawah');
-            
             // Draw video frame to canvas
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
@@ -388,6 +386,8 @@
         // Start
         async function start() {
             try {
+                updateStatus('📷 Nyalain kamera...');
+                
                 const stream = await navigator.mediaDevices.getUserMedia({ 
                     video: { width: { ideal: 640 }, height: { ideal: 480 } }
                 });
@@ -395,17 +395,25 @@
                 video.srcObject = stream;
                 video.onloadedmetadata = () => {
                     video.play();
-                    updateStatus('Initializing...');
-                    initThreeJS();
+                    updateStatus('🔄 Loading MediaPipe...');
                     
-                    const camera = new Camera(video, {
-                        onFrame: async () => {
-                            await hands.send({ image: video });
-                        },
-                        width: 640,
-                        height: 480
-                    });
-                    camera.start();
+                    // Initialize Three.js
+                    setTimeout(() => {
+                        initThreeJS();
+                    }, 100);
+                    
+                    // Initialize camera with delay
+                    setTimeout(() => {
+                        const camera = new Camera(video, {
+                            onFrame: async () => {
+                                await hands.send({ image: video });
+                            },
+                            width: 640,
+                            height: 480
+                        });
+                        camera.start();
+                        updateStatus('✅ Siap! Gerakkan tangan ke kiri/kanan/atas/bawah');
+                    }, 800);
                 };
             } catch (err) {
                 updateStatusError('❌ Ijinkan akses kamera!');
